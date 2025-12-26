@@ -1,0 +1,118 @@
+---
+title: "Practical Machine Learning Prediction Assignment"
+author: "Nishath Anjum"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+## Background
+
+Using wearable devices such as accelerometers, it is possible to collect large amounts of data related to human movement. In this project, data from accelerometers placed on the belt, forearm, arm, and dumbbell of six participants are used. The objective is to predict the manner in which the participants performed barbell lifts. The outcome variable is `classe`, which has five possible levels (A–E).
+
+---
+
+## Data Loading
+
+```{r load-data, message=FALSE, warning=FALSE}
+library(caret)
+library(randomForest)
+library(rpart)
+library(rpart.plot)
+
+trainingUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testingUrl  <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+training <- read.csv(trainingUrl, na.strings = c("NA", "", "#DIV/0!"))
+testing  <- read.csv(testingUrl, na.strings = c("NA", "", "#DIV/0!"))
+```
+
+---
+
+## Data Cleaning
+
+```{r data-cleaning}
+na_columns <- colSums(is.na(training)) / nrow(training)
+
+training_clean <- training[, na_columns < 0.95]
+testing_clean  <- testing[, na_columns < 0.95]
+
+training_clean <- training_clean[, -(1:7)]
+testing_clean  <- testing_clean[, -(1:7)]
+
+training_clean$classe <- factor(training_clean$classe)
+```
+
+---
+
+## Data Partitioning
+
+```{r partitioning}
+set.seed(123)
+inTrain <- createDataPartition(training_clean$classe, p = 0.7, list = FALSE)
+
+trainData <- training_clean[inTrain, ]
+testData  <- training_clean[-inTrain, ]
+
+# Force identical factor levels
+testData$classe <- factor(testData$classe, levels = levels(trainData$classe))
+```
+
+---
+
+## Model Building
+
+### Decision Tree Model
+
+```{r decision-tree}
+model_rpart <- rpart(classe ~ ., data = trainData, method = "class")
+pred_rpart <- predict(model_rpart, testData, type = "class")
+
+pred_rpart <- factor(pred_rpart, levels = levels(trainData$classe))
+
+confusionMatrix(pred_rpart, testData$classe)
+```
+
+The decision tree model shows relatively lower accuracy.
+
+---
+
+### Random Forest Model
+
+```{r random-forest}
+set.seed(123)
+rf_model <- randomForest(classe ~ ., data = trainData)
+pred_rf <- predict(rf_model, testData)
+
+pred_rf <- factor(pred_rf, levels = levels(trainData$classe))
+
+confusionMatrix(pred_rf, testData$classe)
+```
+
+The Random Forest model provides significantly higher accuracy and is selected as the final model.
+
+---
+
+## Out-of-Sample Error
+
+```{r out-of-sample-error}
+accuracy <- confusionMatrix(pred_rf, testData$classe)$overall["Accuracy"]
+out_of_sample_error <- 1 - accuracy
+out_of_sample_error
+```
+
+---
+
+## Final Prediction on Test Data
+
+```{r final-predictions}
+final_predictions <- predict(rf_model, testing_clean)
+final_predictions
+```
+
+These predictions were submitted to the Course Project Prediction Quiz.
+
+---
+
+## Conclusion
+
+Random Forest achieved very high accuracy and a very low expected out-of-sample error. The model was therefore selected and successfully used to predict all 20 test cases.
